@@ -1,4 +1,4 @@
-const CACHE_NAME = 'desk-health-v5';
+const CACHE_NAME = 'desk-health-v6';
 const ASSETS = [
   './',
   './index.html',
@@ -13,18 +13,13 @@ const ASSETS = [
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then(async (cache) => {
-      // Cache files individually so a missing icon doesn't crash the service worker
       await Promise.allSettled(
         ASSETS.map(async (asset) => {
           try {
-            const res = await fetch(asset);
-            if (!res.ok) {
-              console.warn(`[SW] Failed to fetch: ${asset} (status: ${res.status})`);
-              return;
-            }
-            await cache.put(asset, res);
+            const res = await fetch(asset, { cache: 'no-cache' });
+            if (res.ok) await cache.put(asset, res);
           } catch (err) {
-            console.warn(`[SW] Network error caching: ${asset}`, err);
+            console.warn(`[SW] Could not cache: ${asset}`, err);
           }
         })
       );
