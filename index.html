@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Desk & Health Tracker</title>
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#0ea5e9">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <!-- Fullscreen Alert Overlay -->
+  <div id="alertOverlay" class="alert-overlay hidden">
+    <div class="alert-box">
+      <h2 id="alertTitle">Time to Stand Up!</h2>
+      <p id="alertMessage">Take a stretch and drink some water.</p>
+      <div class="alert-actions">
+        <button id="alertDismissBtn" class="btn btn-primary">Done / Reset</button>
+        <button id="alertSnoozeBtn" class="btn btn-secondary">Snooze (5m)</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="container">
+    <header class="header">
+      <div>
+        <h1>Desk & Health Reminders</h1>
+        <p class="subtitle">Periodic sit-stand & hydration loop</p>
+      </div>
+      <div class="header-controls">
+        <button id="enableNotifBtn" class="btn btn-secondary">🔔 Enable Desktop Notifications</button>
+        <button id="installAppBtn" class="btn btn-primary hidden">📥 Install App</button>
+      </div>
+    </header>
+
+    <!-- Add Custom Timer Form -->
+    <section class="card config-card">
+      <h3>Create New Routine</h3>
+      <form id="newTimerForm" class="timer-form">
+        <div class="form-group">
+          <label for="timerLabel">Label</label>
+          <input type="text" id="timerLabel" placeholder="e.g. Stand Up, Drink Water" required>
+        </div>
+        <div class="form-group">
+          <label for="timerMinutes">Interval (Minutes)</label>
+          <input type="number" id="timerMinutes" min="1" max="180" value="30" required>
+        </div>
+        <div class="form-group">
+          <label for="timerColor">Alert Accent</label>
+          <select id="timerColor">
+            <option value="#f97316">Orange (Stand/Move)</option>
+            <option value="#0ea5e9">Sky Blue (Hydration)</option>
+            <option value="#10b981">Green (Eyes Rest)</option>
+            <option value="#ef4444">Red (High Priority)</option>
+          </select>
+        </div>
+        <button type="submit" class="btn btn-submit">Add Reminder</button>
+      </form>
+    </section>
+
+    <!-- Active Timers Grid -->
+    <main>
+      <div class="section-title">
+        <h2>Active Routines</h2>
+      </div>
+      <div id="timerGrid" class="timer-grid">
+        <!-- Rendered dynamically -->
+      </div>
+    </main>
+  </div>
+
+  <script src="js/audio.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
