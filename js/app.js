@@ -1,12 +1,13 @@
-const STORAGE_KEY = 'desk_health_timers_v1';
+const STORAGE_KEY = 'desk_health_timers_v2';
 
+// Clean schema without volatile Date.now() embedded in defaults
 const DEFAULT_TIMERS = [
   {
     id: 'stand-up-default',
     label: 'Get Up & Stretch',
     minutes: 45,
     accent: '#f97316',
-    targetTimestamp: Date.now() + 45 * 60 * 1000,
+    targetTimestamp: null,
     active: true
   },
   {
@@ -14,7 +15,7 @@ const DEFAULT_TIMERS = [
     label: 'Hydration Break',
     minutes: 30,
     accent: '#0ea5e9',
-    targetTimestamp: Date.now() + 30 * 60 * 1000,
+    targetTimestamp: null,
     active: true
   }
 ];
@@ -24,13 +25,14 @@ let activeFiringTimer = null;
 let deferredInstallPrompt = null;
 
 window.addEventListener('DOMContentLoaded', () => {
+  initializeTimers();
   renderTimers();
   registerServiceWorker();
   setupEventListeners();
 
   setInterval(tick, 1000);
 
-  // Catch up overdue timers when coming back to the tab
+  // Catch up immediately when returning to app / unlocking screen
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') {
       tick();
@@ -42,7 +44,8 @@ function loadTimers() {
   const saved = localStorage.getItem(STORAGE_KEY);
   if (!saved) return DEFAULT_TIMERS;
   try {
-    return JSON.parse(saved);
+    const parsed = JSON.parse(saved);
+    return Array.isArray(parsed) && parsed.length > 0 ? parsed : DEFAULT_TIMERS;
   } catch {
     return DEFAULT_TIMERS;
   }
@@ -50,6 +53,21 @@ function loadTimers() {
 
 function saveTimers() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(timers));
+}
+
+// Ensure every timer has a valid future targetTimestamp
+function initializeTimers() {
+  const now = Date.now();
+  let changed = false;
+
+  timers.forEach((t) => {
+    if (!t.targetTimestamp) {
+      t.targetTimestamp = now + t.minutes * 60 * 1000;
+      changed = true;
+    }
+  });
+
+  if (changed) saveTimers();
 }
 
 function tick() {
@@ -61,7 +79,12 @@ function tick() {
 
     if (now >= t.targetTimestamp) {
       triggerAlert(t);
-      t.targetTimestamp = Date.now() + t.minutes * 60 * 1000;
+
+      // Advance by full cycle intervals so time isn't lost if phone was sleeping
+      const intervalMs = t.minutes * 60 * 1000;
+      const missedIntervals = Math.floor((now - t.targetTimestamp) / intervalMs) + 1;
+      t.targetTimestamp += missedIntervals * intervalMs;
+
       stateChanged = true;
     }
   });
@@ -71,13 +94,9 @@ function tick() {
 }
 
 function triggerAlert(timer) {
-  // 1. Audio tone (plays if app/browser is in focus)
   playAlertChime();
-
-  // 2. Tab title change
   document.title = `🔔 [${timer.label}] - Time's Up!`;
 
-  // 3. System Notification (fires through Service Worker for mobile/background vibration)
   if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
     navigator.serviceWorker.controller.postMessage({
       type: 'NOTIFY',
@@ -92,7 +111,6 @@ function triggerAlert(timer) {
     });
   }
 
-  // 4. In-App Pulsing screen overlay
   if (!activeFiringTimer) {
     activeFiringTimer = timer;
     const overlay = document.getElementById('alertOverlay');
@@ -165,7 +183,6 @@ function renderTimers() {
   updateCountdownDisplays();
 }
 
-// Actions
 window.resetTimer = function (id) {
   const t = timers.find((item) => item.id === id);
   if (t) {
@@ -193,7 +210,6 @@ window.openEditModal = function (id) {
 };
 
 function setupEventListeners() {
-  // New timer creation
   document.getElementById('newTimerForm').addEventListener('submit', (e) => {
     e.preventDefault();
     const label = document.getElementById('timerLabel').value.trim();
@@ -216,7 +232,6 @@ function setupEventListeners() {
     e.target.reset();
   });
 
-  // Edit timer submit
   document.getElementById('editTimerForm').addEventListener('submit', (e) => {
     e.preventDefault();
     const id = document.getElementById('editTimerId').value;
@@ -240,11 +255,9 @@ function setupEventListeners() {
     document.getElementById('editModal').classList.add('hidden');
   });
 
-  // Alert overlay buttons
   document.getElementById('alertDismissBtn').addEventListener('click', dismissAlert);
   document.getElementById('alertSnoozeBtn').addEventListener('click', () => snoozeAlert(5));
 
-  // Request notifications
   document.getElementById('enableNotifBtn').addEventListener('click', async () => {
     if ('Notification' in window) {
       const permission = await Notification.requestPermission();
@@ -256,7 +269,6 @@ function setupEventListeners() {
     }
   });
 
-  // PWA Prompt
   const installBtn = document.getElementById('installAppBtn');
   window.addEventListener('beforeinstallprompt', (e) => {
     e.preventDefault();
@@ -279,11 +291,6 @@ function registerServiceWorker() {
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker
       .register('./sw.js')
-      .then((reg) => {
-        console.log('SW registered successfully:', reg.scope);
-      })
-      .catch((err) => {
-        console.error('SW registration failed:', err);
-      });
+      .catch((err) => console.log('SW registration error:', err));
   }
 }
