@@ -22,6 +22,37 @@
     </div>
   </div>
 
+  <!-- Edit Routine Modal -->
+  <div id="editModal" class="modal-backdrop hidden">
+    <div class="modal-card">
+      <h3>Edit Routine</h3>
+      <form id="editTimerForm" class="edit-form">
+        <input type="hidden" id="editTimerId">
+        <div class="form-group">
+          <label for="editTimerLabel">Label</label>
+          <input type="text" id="editTimerLabel" required>
+        </div>
+        <div class="form-group">
+          <label for="editTimerMinutes">Interval (Minutes)</label>
+          <input type="number" id="editTimerMinutes" min="1" max="180" required>
+        </div>
+        <div class="form-group">
+          <label for="editTimerColor">Accent</label>
+          <select id="editTimerColor">
+            <option value="#f97316">Orange (Stand/Move)</option>
+            <option value="#0ea5e9">Sky Blue (Hydration)</option>
+            <option value="#10b981">Green (Eyes Rest)</option>
+            <option value="#ef4444">Red (High Priority)</option>
+          </select>
+        </div>
+        <div class="modal-actions">
+          <button type="submit" class="btn btn-submit">Save Changes</button>
+          <button type="button" id="closeEditModalBtn" class="btn btn-secondary">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <div class="container">
     <header class="header">
       <div>
@@ -29,7 +60,7 @@
         <p class="subtitle">Periodic sit-stand & hydration loop</p>
       </div>
       <div class="header-controls">
-        <button id="enableNotifBtn" class="btn btn-secondary">🔔 Enable Desktop Notifications</button>
+        <button id="enableNotifBtn" class="btn btn-secondary">🔔 Enable System Alerts</button>
         <button id="installAppBtn" class="btn btn-primary hidden">📥 Install App</button>
       </div>
     </header>
