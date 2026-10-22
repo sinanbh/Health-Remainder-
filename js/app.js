@@ -1,4 +1,4 @@
-const STORAGE_KEY = 'desk_health_timers_v4';
+const STORAGE_KEY = 'desk_health_timers_v5';
 
 function createDefaultTimers() {
   const now = Date.now();
@@ -9,7 +9,8 @@ function createDefaultTimers() {
       minutes: 45,
       accent: '#f97316',
       targetTimestamp: now + 45 * 60 * 1000,
-      active: true
+      active: true,
+      status: 'RUNNING' // 'RUNNING' | 'ALERTING'
     },
     {
       id: 'water-default',
@@ -17,7 +18,8 @@ function createDefaultTimers() {
       minutes: 30,
       accent: '#0ea5e9',
       targetTimestamp: now + 30 * 60 * 1000,
-      active: true
+      active: true,
+      status: 'RUNNING'
     }
   ];
 }
@@ -27,17 +29,25 @@ let activeFiringTimer = null;
 let deferredInstallPrompt = null;
 
 window.addEventListener('DOMContentLoaded', () => {
-  tick();
   renderTimers();
   registerServiceWorker();
   setupEventListeners();
 
+  // Run immediately on launch
+  tick();
+
+  // Check every second while open
   setInterval(tick, 1000);
 
+  // Catch up and immediately fire pending notifications when returning
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') {
       tick();
     }
+  });
+
+  window.addEventListener('focus', () => {
+    tick();
   });
 });
 
@@ -74,19 +84,18 @@ function tick() {
   timers.forEach((t) => {
     if (!t.active) return;
 
+    // Safety fallback
     if (!t.targetTimestamp) {
       t.targetTimestamp = now + t.minutes * 60 * 1000;
+      t.status = 'RUNNING';
       stateChanged = true;
       return;
     }
 
-    if (now >= t.targetTimestamp) {
+    // Timer reached zero and hasn't triggered modal yet
+    if (now >= t.targetTimestamp && t.status !== 'ALERTING') {
+      t.status = 'ALERTING';
       triggerAlert(t);
-
-      const intervalMs = t.minutes * 60 * 1000;
-      const missedIntervals = Math.floor((now - t.targetTimestamp) / intervalMs) + 1;
-      t.targetTimestamp += missedIntervals * intervalMs;
-
       stateChanged = true;
     }
   });
@@ -99,20 +108,10 @@ function triggerAlert(timer) {
   playAlertChime();
   document.title = `🔔 [${timer.label}] - Time's Up!`;
 
-  if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
-    navigator.serviceWorker.controller.postMessage({
-      type: 'NOTIFY',
-      title: timer.label,
-      body: `Interval of ${timer.minutes}m reached. Time to take action!`,
-      id: timer.id
-    });
-  } else if ('Notification' in window && Notification.permission === 'granted') {
-    new Notification(timer.label, {
-      body: `Interval of ${timer.minutes}m reached. Time to take action!`,
-      icon: 'icons/icon-192.png'
-    });
-  }
+  // Fire system/lockscreen notification
+  sendSystemNotification(timer);
 
+  // Open modal and PAUSE this timer until user decides
   if (!activeFiringTimer) {
     activeFiringTimer = timer;
     const overlay = document.getElementById('alertOverlay');
@@ -122,18 +121,75 @@ function triggerAlert(timer) {
   }
 }
 
+function sendSystemNotification(timer) {
+  const title = timer.label;
+  const options = {
+    body: `Interval of ${timer.minutes}m reached. Time to take action!`,
+    icon: 'icons/icon-192.png',
+    badge: 'icons/icon-192.png',
+    vibrate: [300, 100, 300, 100, 300],
+    tag: timer.id,
+    renotify: true
+  };
+
+  // Try service worker registration first (preferred on mobile Android)
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.ready.then((reg) => {
+      reg.showNotification(title, options);
+    }).catch(() => {
+      fallbackNotification(title, options);
+    });
+  } else {
+    fallbackNotification(title, options);
+  }
+}
+
+function fallbackNotification(title, options) {
+  if ('Notification' in window && Notification.permission === 'granted') {
+    new Notification(title, options);
+  }
+}
+
 function dismissAlert() {
-  document.getElementById('alertOverlay').classList.add('hidden');
+  const overlay = document.getElementById('alertOverlay');
+  overlay.classList.add('hidden');
   document.title = 'Desk & Health Tracker';
-  activeFiringTimer = null;
+
+  // Reset the timer that was waiting on this modal to start fresh from now
+  if (activeFiringTimer) {
+    activeFiringTimer.status = 'RUNNING';
+    activeFiringTimer.targetTimestamp = Date.now() + activeFiringTimer.minutes * 60 * 1000;
+    saveTimers();
+    activeFiringTimer = null;
+  }
+
+  // Check if any other timer was also alerting while this one was open
+  const nextPending = timers.find((t) => t.status === 'ALERTING');
+  if (nextPending) {
+    triggerAlert(nextPending);
+  }
+
+  renderTimers();
 }
 
 function snoozeAlert(extraMinutes = 5) {
+  const overlay = document.getElementById('alertOverlay');
+  overlay.classList.add('hidden');
+  document.title = 'Desk & Health Tracker';
+
+  // Add 5 minutes from right now
   if (activeFiringTimer) {
+    activeFiringTimer.status = 'RUNNING';
     activeFiringTimer.targetTimestamp = Date.now() + extraMinutes * 60 * 1000;
     saveTimers();
+    activeFiringTimer = null;
   }
-  dismissAlert();
+
+  const nextPending = timers.find((t) => t.status === 'ALERTING');
+  if (nextPending) {
+    triggerAlert(nextPending);
+  }
+
   renderTimers();
 }
 
@@ -150,8 +206,14 @@ function updateCountdownDisplays() {
   timers.forEach((t) => {
     const el = document.getElementById(`time-${t.id}`);
     if (el) {
-      const diff = t.targetTimestamp - now;
-      el.textContent = formatTimeLeft(diff);
+      if (t.status === 'ALERTING') {
+        el.textContent = 'DUE NOW';
+        el.style.color = '#ef4444';
+      } else {
+        const diff = t.targetTimestamp - now;
+        el.textContent = formatTimeLeft(diff);
+        el.style.color = '';
+      }
     }
   });
 }
@@ -188,14 +250,18 @@ function renderTimers() {
 window.resetTimer = function (id) {
   const t = timers.find((item) => item.id === id);
   if (t) {
+    t.status = 'RUNNING';
     t.targetTimestamp = Date.now() + t.minutes * 60 * 1000;
     saveTimers();
-    updateCountdownDisplays();
+    renderTimers();
   }
 };
 
 window.deleteTimer = function (id) {
   timers = timers.filter((item) => item.id !== id);
+  if (activeFiringTimer && activeFiringTimer.id === id) {
+    dismissAlert();
+  }
   saveTimers();
   renderTimers();
 };
@@ -226,7 +292,8 @@ function setupEventListeners() {
       minutes,
       accent,
       targetTimestamp: Date.now() + minutes * 60 * 1000,
-      active: true
+      active: true,
+      status: 'RUNNING'
     });
 
     saveTimers();
@@ -246,6 +313,7 @@ function setupEventListeners() {
       t.label = label;
       t.minutes = minutes;
       t.accent = accent;
+      t.status = 'RUNNING';
       t.targetTimestamp = Date.now() + minutes * 60 * 1000;
       saveTimers();
       renderTimers();
@@ -295,4 +363,4 @@ function registerServiceWorker() {
       .register('./sw.js')
       .catch((err) => console.log('SW registration error:', err));
   }
-}
+                                                                             }
