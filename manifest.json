@@ -2,7 +2,7 @@
   "id": "/Health-Remainder-/",
   "name": "Desk & Health Reminder",
   "short_name": "DeskHealth",
-  "start_url": "/Health-Remainder-/",
+  "start_url": "/Health-Remainder-/index.html",
   "scope": "/Health-Remainder-/",
   "display": "standalone",
   "background_color": "#0f172a",
