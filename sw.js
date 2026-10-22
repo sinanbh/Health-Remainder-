@@ -1,18 +1,34 @@
-const CACHE_NAME = 'desk-health-v3';
+const CACHE_NAME = 'desk-health-v4';
 const ASSETS = [
-  '/Health-Remainder-/',
-  '/Health-Remainder-/index.html',
-  '/Health-Remainder-/css/style.css',
-  '/Health-Remainder-/js/audio.js',
-  '/Health-Remainder-/js/app.js',
-  '/Health-Remainder-/manifest.json',
-  '/Health-Remainder-/icons/icon-192.png',
-  '/Health-Remainder-/icons/icon-512.png'
+  './',
+  './index.html',
+  './css/style.css',
+  './js/audio.js',
+  './js/app.js',
+  './manifest.json',
+  './icons/icon-192.png',
+  './icons/icon-512.png'
 ];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS))
+    caches.open(CACHE_NAME).then(async (cache) => {
+      // Cache files individually so a missing icon doesn't crash the service worker
+      await Promise.allSettled(
+        ASSETS.map(async (asset) => {
+          try {
+            const res = await fetch(asset);
+            if (!res.ok) {
+              console.warn(`[SW] Failed to fetch: ${asset} (status: ${res.status})`);
+              return;
+            }
+            await cache.put(asset, res);
+          } catch (err) {
+            console.warn(`[SW] Network error caching: ${asset}`, err);
+          }
+        })
+      );
+    })
   );
   self.skipWaiting();
 });
