@@ -1,4 +1,4 @@
-const CACHE_NAME = 'desk-health-v4';
+const CACHE_NAME = 'desk-health-v5';
 const ASSETS = [
   './',
   './index.html',
