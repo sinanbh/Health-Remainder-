@@ -1,38 +1,39 @@
-const STORAGE_KEY = 'desk_health_timers_v2';
+const STORAGE_KEY = 'desk_health_timers_v4';
 
-// Clean schema without volatile Date.now() embedded in defaults
-const DEFAULT_TIMERS = [
-  {
-    id: 'stand-up-default',
-    label: 'Get Up & Stretch',
-    minutes: 45,
-    accent: '#f97316',
-    targetTimestamp: null,
-    active: true
-  },
-  {
-    id: 'water-default',
-    label: 'Hydration Break',
-    minutes: 30,
-    accent: '#0ea5e9',
-    targetTimestamp: null,
-    active: true
-  }
-];
+function createDefaultTimers() {
+  const now = Date.now();
+  return [
+    {
+      id: 'stand-up-default',
+      label: 'Get Up & Stretch',
+      minutes: 45,
+      accent: '#f97316',
+      targetTimestamp: now + 45 * 60 * 1000,
+      active: true
+    },
+    {
+      id: 'water-default',
+      label: 'Hydration Break',
+      minutes: 30,
+      accent: '#0ea5e9',
+      targetTimestamp: now + 30 * 60 * 1000,
+      active: true
+    }
+  ];
+}
 
 let timers = loadTimers();
 let activeFiringTimer = null;
 let deferredInstallPrompt = null;
 
 window.addEventListener('DOMContentLoaded', () => {
-  initializeTimers();
+  tick();
   renderTimers();
   registerServiceWorker();
   setupEventListeners();
 
   setInterval(tick, 1000);
 
-  // Catch up immediately when returning to app / unlocking screen
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') {
       tick();
@@ -42,32 +43,28 @@ window.addEventListener('DOMContentLoaded', () => {
 
 function loadTimers() {
   const saved = localStorage.getItem(STORAGE_KEY);
-  if (!saved) return DEFAULT_TIMERS;
+  if (!saved) {
+    const fresh = createDefaultTimers();
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(fresh));
+    return fresh;
+  }
   try {
     const parsed = JSON.parse(saved);
-    return Array.isArray(parsed) && parsed.length > 0 ? parsed : DEFAULT_TIMERS;
+    if (Array.isArray(parsed) && parsed.length > 0) {
+      return parsed;
+    }
+    const fresh = createDefaultTimers();
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(fresh));
+    return fresh;
   } catch {
-    return DEFAULT_TIMERS;
+    const fresh = createDefaultTimers();
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(fresh));
+    return fresh;
   }
 }
 
 function saveTimers() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(timers));
-}
-
-// Ensure every timer has a valid future targetTimestamp
-function initializeTimers() {
-  const now = Date.now();
-  let changed = false;
-
-  timers.forEach((t) => {
-    if (!t.targetTimestamp) {
-      t.targetTimestamp = now + t.minutes * 60 * 1000;
-      changed = true;
-    }
-  });
-
-  if (changed) saveTimers();
 }
 
 function tick() {
@@ -77,10 +74,15 @@ function tick() {
   timers.forEach((t) => {
     if (!t.active) return;
 
+    if (!t.targetTimestamp) {
+      t.targetTimestamp = now + t.minutes * 60 * 1000;
+      stateChanged = true;
+      return;
+    }
+
     if (now >= t.targetTimestamp) {
       triggerAlert(t);
 
-      // Advance by full cycle intervals so time isn't lost if phone was sleeping
       const intervalMs = t.minutes * 60 * 1000;
       const missedIntervals = Math.floor((now - t.targetTimestamp) / intervalMs) + 1;
       t.targetTimestamp += missedIntervals * intervalMs;
