@@ -1,6 +1,5 @@
 const STORAGE_KEY = 'desk_health_timers_v1';
 
-// Default starter timers if storage is empty
 const DEFAULT_TIMERS = [
   {
     id: 'stand-up-default',
@@ -24,17 +23,21 @@ let timers = loadTimers();
 let activeFiringTimer = null;
 let deferredInstallPrompt = null;
 
-// Initialize
 window.addEventListener('DOMContentLoaded', () => {
   renderTimers();
   registerServiceWorker();
   setupEventListeners();
 
-  // Tick every second
   setInterval(tick, 1000);
+
+  // Catch up overdue timers when coming back to the tab
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+      tick();
+    }
+  });
 });
 
-// Load / Save localStorage
 function loadTimers() {
   const saved = localStorage.getItem(STORAGE_KEY);
   if (!saved) return DEFAULT_TIMERS;
@@ -49,7 +52,6 @@ function saveTimers() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(timers));
 }
 
-// Timer Loop
 function tick() {
   const now = Date.now();
   let stateChanged = false;
@@ -57,9 +59,8 @@ function tick() {
   timers.forEach((t) => {
     if (!t.active) return;
 
-    if (now >= t.targetTimestamp && !activeFiringTimer) {
+    if (now >= t.targetTimestamp) {
       triggerAlert(t);
-      // Advance to next cycle automatically
       t.targetTimestamp = Date.now() + t.minutes * 60 * 1000;
       stateChanged = true;
     }
@@ -69,32 +70,38 @@ function tick() {
   updateCountdownDisplays();
 }
 
-// Visual and Sound Alert
 function triggerAlert(timer) {
-  activeFiringTimer = timer;
-
-  // 1. Play Tone
+  // 1. Audio tone (plays if app/browser is in focus)
   playAlertChime();
 
-  // 2. Browser Tab Title change
+  // 2. Tab title change
   document.title = `🔔 [${timer.label}] - Time's Up!`;
 
-  // 3. Native Desktop Notification
-  if ('Notification' in window && Notification.permission === 'granted') {
+  // 3. System Notification (fires through Service Worker for mobile/background vibration)
+  if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+    navigator.serviceWorker.controller.postMessage({
+      type: 'NOTIFY',
+      title: timer.label,
+      body: `Interval of ${timer.minutes}m reached. Time to take action!`,
+      id: timer.id
+    });
+  } else if ('Notification' in window && Notification.permission === 'granted') {
     new Notification(timer.label, {
-      body: `Reminder interval reached (${timer.minutes}m). Get moving!`,
+      body: `Interval of ${timer.minutes}m reached. Time to take action!`,
       icon: 'icons/icon-192.png'
     });
   }
 
-  // 4. In-App Pulsing Overlay
-  const overlay = document.getElementById('alertOverlay');
-  document.getElementById('alertTitle').textContent = timer.label;
-  document.getElementById('alertMessage').textContent = `Interval of ${timer.minutes} min reached. Take a break!`;
-  overlay.classList.remove('hidden');
+  // 4. In-App Pulsing screen overlay
+  if (!activeFiringTimer) {
+    activeFiringTimer = timer;
+    const overlay = document.getElementById('alertOverlay');
+    document.getElementById('alertTitle').textContent = timer.label;
+    document.getElementById('alertMessage').textContent = `Interval of ${timer.minutes} min reached. Take a break!`;
+    overlay.classList.remove('hidden');
+  }
 }
 
-// Dismiss or Snooze
 function dismissAlert() {
   document.getElementById('alertOverlay').classList.add('hidden');
   document.title = 'Desk & Health Tracker';
@@ -110,7 +117,6 @@ function snoozeAlert(extraMinutes = 5) {
   renderTimers();
 }
 
-// Formatting
 function formatTimeLeft(ms) {
   if (ms <= 0) return '00:00';
   const totalSeconds = Math.floor(ms / 1000);
@@ -130,7 +136,6 @@ function updateCountdownDisplays() {
   });
 }
 
-// DOM Rendering
 function renderTimers() {
   const grid = document.getElementById('timerGrid');
   grid.innerHTML = '';
@@ -143,13 +148,16 @@ function renderTimers() {
       <div>
         <div class="timer-card-head">
           <span class="timer-title">${t.label}</span>
-          <button class="btn btn-danger" onclick="deleteTimer('${t.id}')">Delete</button>
+          <div class="card-actions-top">
+            <button class="btn btn-secondary btn-small" onclick="openEditModal('${t.id}')">Edit</button>
+            <button class="btn btn-danger btn-small" onclick="deleteTimer('${t.id}')">Delete</button>
+          </div>
         </div>
         <div id="time-${t.id}" class="timer-remaining">--:--</div>
       </div>
       <div class="timer-footer">
         <span class="timer-meta">Interval: ${t.minutes} mins</span>
-        <button class="btn btn-secondary" onclick="resetTimer('${t.id}')">Reset</button>
+        <button class="btn btn-secondary btn-small" onclick="resetTimer('${t.id}')">Reset</button>
       </div>
     `;
     grid.appendChild(card);
@@ -157,7 +165,7 @@ function renderTimers() {
   updateCountdownDisplays();
 }
 
-// Timer Actions
+// Actions
 window.resetTimer = function (id) {
   const t = timers.find((item) => item.id === id);
   if (t) {
@@ -173,9 +181,19 @@ window.deleteTimer = function (id) {
   renderTimers();
 };
 
-// UI Handlers & Setup
+window.openEditModal = function (id) {
+  const t = timers.find((item) => item.id === id);
+  if (!t) return;
+
+  document.getElementById('editTimerId').value = t.id;
+  document.getElementById('editTimerLabel').value = t.label;
+  document.getElementById('editTimerMinutes').value = t.minutes;
+  document.getElementById('editTimerColor').value = t.accent;
+  document.getElementById('editModal').classList.remove('hidden');
+};
+
 function setupEventListeners() {
-  // New timer form
+  // New timer creation
   document.getElementById('newTimerForm').addEventListener('submit', (e) => {
     e.preventDefault();
     const label = document.getElementById('timerLabel').value.trim();
@@ -198,22 +216,47 @@ function setupEventListeners() {
     e.target.reset();
   });
 
-  // Alert modal buttons
+  // Edit timer submit
+  document.getElementById('editTimerForm').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const id = document.getElementById('editTimerId').value;
+    const label = document.getElementById('editTimerLabel').value.trim();
+    const minutes = parseInt(document.getElementById('editTimerMinutes').value, 10);
+    const accent = document.getElementById('editTimerColor').value;
+
+    const t = timers.find((item) => item.id === id);
+    if (t) {
+      t.label = label;
+      t.minutes = minutes;
+      t.accent = accent;
+      t.targetTimestamp = Date.now() + minutes * 60 * 1000;
+      saveTimers();
+      renderTimers();
+    }
+    document.getElementById('editModal').classList.add('hidden');
+  });
+
+  document.getElementById('closeEditModalBtn').addEventListener('click', () => {
+    document.getElementById('editModal').classList.add('hidden');
+  });
+
+  // Alert overlay buttons
   document.getElementById('alertDismissBtn').addEventListener('click', dismissAlert);
   document.getElementById('alertSnoozeBtn').addEventListener('click', () => snoozeAlert(5));
 
-  // Notification button
-  document.getElementById('enableNotifBtn').addEventListener('click', () => {
+  // Request notifications
+  document.getElementById('enableNotifBtn').addEventListener('click', async () => {
     if ('Notification' in window) {
-      Notification.requestPermission().then((permission) => {
-        if (permission === 'granted') {
-          alert('Desktop notifications are enabled.');
-        }
-      });
+      const permission = await Notification.requestPermission();
+      if (permission === 'granted') {
+        alert('Alerts enabled! You will now receive system notifications on lock screen and background.');
+      } else {
+        alert('Notification permission was denied. Please allow it in browser settings.');
+      }
     }
   });
 
-  // PWA Install banner handling
+  // PWA Prompt
   const installBtn = document.getElementById('installAppBtn');
   window.addEventListener('beforeinstallprompt', (e) => {
     e.preventDefault();
@@ -232,11 +275,10 @@ function setupEventListeners() {
   });
 }
 
-// Service Worker Registration
 function registerServiceWorker() {
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker
       .register('./sw.js')
       .catch((err) => console.log('SW registration error:', err));
   }
-  }
+}
