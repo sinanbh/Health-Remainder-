@@ -278,7 +278,7 @@ function setupEventListeners() {
 function registerServiceWorker() {
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker
-      .register('/Health-Remainder-/sw.js', { scope: '/Health-Remainder-/' })
+      .register('./sw.js')
       .then((reg) => {
         console.log('SW registered successfully:', reg.scope);
       })
