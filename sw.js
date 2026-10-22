@@ -1,13 +1,13 @@
-const CACHE_NAME = 'desk-health-v2';
+const CACHE_NAME = 'desk-health-v3';
 const ASSETS = [
-  './',
-  './index.html',
-  './css/style.css',
-  './js/audio.js',
-  './js/app.js',
-  './manifest.json',
-  './icons/icon-192.png',
-  './icons/icon-512.png'
+  '/Health-Remainder-/',
+  '/Health-Remainder-/index.html',
+  '/Health-Remainder-/css/style.css',
+  '/Health-Remainder-/js/audio.js',
+  '/Health-Remainder-/js/app.js',
+  '/Health-Remainder-/manifest.json',
+  '/Health-Remainder-/icons/icon-192.png',
+  '/Health-Remainder-/icons/icon-512.png'
 ];
 
 self.addEventListener('install', (event) => {
@@ -36,7 +36,6 @@ self.addEventListener('fetch', (event) => {
   );
 });
 
-// Handle incoming background notification triggers
 self.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'NOTIFY') {
     self.registration.showNotification(event.data.title, {
