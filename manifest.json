@@ -2,21 +2,29 @@
   "id": "/Health-Remainder-/",
   "name": "Desk & Health Reminder",
   "short_name": "DeskHealth",
-  "start_url": "/Health-Remainder-/index.html",
+  "start_url": "/Health-Remainder-/",
   "scope": "/Health-Remainder-/",
   "display": "standalone",
   "background_color": "#0f172a",
   "theme_color": "#0ea5e9",
   "icons": [
     {
-      "src": "icons/icon-192.png",
+      "src": "/Health-Remainder-/icons/icon-192.png",
       "sizes": "192x192",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any"
     },
     {
-      "src": "icons/icon-512.png",
+      "src": "/Health-Remainder-/icons/icon-512.png",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/Health-Remainder-/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ]
 }
